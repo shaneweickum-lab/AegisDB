@@ -1,0 +1,22 @@
+{
+  "name": "aegisdb",
+  "version": "0.1.0",
+  "description": "Zero-dependency cryptographic micro-database ecosystem",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "test": "node --experimental-strip-types --test 'test/**/*.test.ts'",
+    "test:coverage": "node --experimental-strip-types --experimental-test-coverage --test 'test/**/*.test.ts'",
+    "bench": "node scripts/bench.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
