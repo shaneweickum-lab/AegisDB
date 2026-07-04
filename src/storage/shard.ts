@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tryDecodeRecordAt } from './record.ts';
 import { AppendLog } from './wal.ts';
@@ -36,6 +37,7 @@ export class Shard {
   }
 
   static async open(dir: string): Promise<Shard> {
+    await mkdir(dir, { recursive: true });
     const dataPath = join(dir, DATA_FILE_NAME);
     const indexPath = join(dir, INDEX_FILE_NAME);
 

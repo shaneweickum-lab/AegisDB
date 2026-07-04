@@ -15,6 +15,15 @@ async function withTempShard(fn: (dir: string) => Promise<void>): Promise<void> 
   }
 }
 
+test('opens cleanly against a directory that does not exist yet (real deployments start from nothing)', () =>
+  withTempShard(async (parentDir) => {
+    const freshDir = join(parentDir, 'not-created-yet', 'nested');
+    const shard = await Shard.open(freshDir);
+    await shard.put('a', utf8Encode('works'));
+    assert.equal(utf8Decode((await shard.get('a'))!), 'works');
+    await shard.close();
+  }));
+
 test('put then get returns the same bytes', () =>
   withTempShard(async (dir) => {
     const shard = await Shard.open(dir);

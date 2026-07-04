@@ -6,6 +6,7 @@ import { serveStatic } from './static.ts';
 import { NotUnlockedError, type AppContext } from './app-context.ts';
 import { registerAuthRoutes } from './routes/auth-routes.ts';
 import { registerDocumentRoutes } from './routes/docs-routes.ts';
+import { registerCryptoRoutes } from './routes/crypto-routes.ts';
 import { performHandshake, rejectUpgrade } from './ws/handshake.ts';
 import { WsConnection } from './ws/connection.ts';
 
@@ -38,6 +39,7 @@ export function buildRouter(app: AppContext): Router {
   const router = new Router();
   registerAuthRoutes(router, app);
   registerDocumentRoutes(router, app);
+  registerCryptoRoutes(router, app);
   return router;
 }
 
