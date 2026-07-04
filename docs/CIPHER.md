@@ -35,22 +35,33 @@ higher bands — without floating point, and it reuses the spec's own
 "band" vocabulary from the visualizer section (Section 5.2's diff view
 already talks about coloring by "historical-count band").
 
-**Disjoint output ranges per band.** Pick a per-band slot width `A`, a
-power of two, at least as large as the alphabet (`A = 128` for a ~90-symbol
-alphabet). With a 16-bit output (2 bytes per input symbol), the 65536-value
-space splits into up to 512 disjoint bands of width 128 — cap `BAND_MAX`
-around 32 for a rich but legible drift. Band `b` owns exactly the range
-`[b*A, (b+1)*A)`. Because the ranges never overlap, **the band is a pure
-function of the output value** — decode reads it directly (`out16 >> 7`),
-no search required.
+**Disjoint output ranges per band, and why the alphabet is all 256 byte
+values, not just printable ASCII.** The cipher has to transform an
+arbitrary UTF-8 byte stream (`JSON.stringify(doc)` can contain braces,
+quotes, control bytes, multi-byte Unicode — anything), so restricting the
+alphabet to the spec's ~90 named symbols (letters/digits/punctuation)
+would require an escape mechanism for every other byte, which is
+avoidable complexity. Instead the alphabet is simply **all 256 byte
+values** (`alphabetIndex(byte) = a fixed bijective reordering of
+0..255`, built once — see `src/core/alphabet.ts`), which also simplifies
+the band-slot math: the per-band slot width `A` is exactly `256`, so a
+band occupies one high byte value and the in-band code is exactly one low
+byte. With a 16-bit (2-byte) output, `65536 / 256 = 256` structurally
+possible bands; `BAND_MAX` is capped at `31` for a rich but legible drift
+(32 active bands), leaving bands 32-255 simply unused (encode never emits
+them, so decode never needs to handle them).
 
-A 1-byte "compact" mode is also offered, but the same pigeonhole math caps
-it at 2–3 usable bands (`256 / 128`), since a full alphabet-sized disjoint
-band needs at least 128 slots. Default engine id is `bpc-2b`; `bpc-1b` is
-available for anyone who wants the coarser, byte-parity-preserving variant.
+A 1-byte "compact" mode was considered, but with a full 256-value
+alphabet a disjoint band needs the *entire* 1-byte output space, leaving
+zero room for a second band — i.e. 1-byte output can only ever support
+band 0 (no drift at all). That's a real, discovered constraint of
+choosing full-byte-alphabet correctness over the original spec's
+implied ~90-symbol table — it means "1-byte, byte-parity-preserving BPC"
+is out of scope, not a partial variant worth shipping. `bpc-2b` is the
+only BPC engine implemented.
 
 **Per-band keyed bijection.** Within band `b`, a permutation `π_b` over
-`[0, A)` maps each alphabet symbol's index to an in-band code. `π_b` is
+`[0, 256)` maps each byte's alphabet index to an in-band code. `π_b` is
 generated once per document key by seeded Fisher–Yates, with the shuffle's
 randomness streamed from HKDF-Expand(`DocumentKey`, `"bpc-band-" + b`)
 **using rejection sampling, not modulo**, to select unbiased indices —
@@ -62,20 +73,20 @@ spec's IV-derived keystream is applied as a final full-width XOR. Doing
 that here would XOR across the band bits too, scrambling which disjoint
 range an output value falls into and destroying the very invariant decode
 depends on. The fix is to apply the keystream **inside the band's slot
-only** — XOR with a 7-bit keystream byte, which by construction stays
-within `[0, A)` since `A` is a power of two:
+only** — XOR with a full keystream byte, which trivially stays within
+`[0, 256)` since the slot width *is* 256:
 
 ```
 encode(ch at position i):
   s      = alphabetIndex(ch)
   c      = count[ch]; count[ch] = c + 1        # read before increment
   b      = band(c)
-  inband = permute(b, s) XOR keystreamByte(i)   # stays in [0, A)
-  out16  = b * A + inband                       # disjoint by construction
+  inband = permute(b, s) XOR keystreamByte(i)   # stays in [0, 256)
+  out16  = b * 256 + inband                     # disjoint by construction
 
 decode(out16 at position i):
-  b      = out16 >> 7                            # exact, no search
-  inband = out16 & (A - 1)
+  b      = out16 >> 8                            # exact, no search
+  inband = out16 & 0xFF
   code   = inband XOR keystreamByte(i)
   s      = inversePermute(b, code)               # O(1) table lookup
   ch     = symbol(s); count[ch] += 1             # stays in lockstep with encoder
@@ -104,6 +115,15 @@ This is validated empirically in `test/property/bpc-bijection.test.ts`
 and specifically the pathological case that broke the original design: a
 single character repeated thousands of times).
 
+**Bonus: no stored state header needed.** The original spec (Section 1.3)
+stores a "cipher state header" (a FREQ_STATE snapshot) alongside every
+record specifically so decode doesn't have to replay prior state. BPC
+doesn't need this at all — a symbol's band is stored directly in its own
+ciphertext (the high byte), so decode reads it off with no external state.
+Occurrence counts are still tracked during decode, but only to populate
+the visualizer's trace output (`CipherTrace`), not because correctness
+requires it.
+
 ## Engine interface
 
 Both BPC and the real AES-256-GCM engine implement the same boundary
@@ -111,7 +131,7 @@ Both BPC and the real AES-256-GCM engine implement the same boundary
 
 ```ts
 interface CipherEngine {
-  readonly id: 'aes-256-gcm' | 'bpc-2b' | 'bpc-1b';
+  readonly id: 'aes-256-gcm' | 'bpc-2b';
   seal(plaintext: Uint8Array, ctx: SealContext): SealedRecord;
   open(sealed: SealedRecord, ctx: SealContext): Uint8Array;
 }

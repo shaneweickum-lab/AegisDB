@@ -14,9 +14,10 @@
     "test": "node --experimental-strip-types --test 'test/**/*.test.ts'",
     "test:coverage": "node --experimental-strip-types --experimental-test-coverage --test 'test/**/*.test.ts'",
     "bench": "node scripts/bench.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.tests.json"
   },
   "devDependencies": {
+    "@types/node": "^26.1.0",
     "typescript": "^5.9.3"
   }
 }
