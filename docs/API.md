@@ -77,6 +77,30 @@ server-side filtering exists here.
 Triggers compaction on the currently unlocked store. `200` with
 `{ "liveKeys": number, "bytesBefore": number, "bytesAfter": number }`.
 
+## Real-time: WebSocket telemetry
+
+### `GET /api/telemetry/state` (upgrade to WebSocket)
+
+A hand-rolled WebSocket server (RFC 6455 — no `ws` package), attached to
+the same HTTP server and port. Browsers' `WebSocket` constructor can't
+set custom headers, so auth here is a query parameter instead of the
+`Authorization: Bearer` header the REST routes use:
+
+```
+ws://host:port/api/telemetry/state?token=<the same bearer token from /api/auth/unlock>
+```
+
+A missing/invalid token, or any path other than this one, gets a plain
+HTTP rejection (400/401/404) rather than completing the WS handshake.
+
+Every message is JSON-encoded as `{ "topic": string, "data": <anything> }`.
+There's currently exactly one topic, `"telemetry"` — every connected
+client subscribes to it automatically on a successful handshake. Phase 6
+publishes `CipherTrace` steps to it as the visualizer drives an
+encode/decode; nothing else publishes to it yet. The server pings every
+connected client every 30s and drops any connection that doesn't pong
+back before the next ping.
+
 ## Errors
 
 Every error response is `{ "error": "<message>" }` with an appropriate
@@ -86,8 +110,7 @@ session), `404` (not found), `413` (request body over the size cap),
 
 ## What's not here yet
 
-Real-time updates (a WebSocket telemetry/event stream) land in Phase 5;
-this document will grow a corresponding section once that exists. There
-is currently no rate limiting, no per-tenant isolation (that's Phase 9),
-and no pagination on the list endpoint — a consumer building against
+There is currently no rate limiting, no per-tenant isolation (that's
+Phase 9), and no pagination on the list endpoint — a consumer building
+against
 this API today should assume all of those are coming, not already solid.

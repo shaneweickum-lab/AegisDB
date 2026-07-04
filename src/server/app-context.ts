@@ -1,5 +1,6 @@
 import { DocumentStore } from '../storage/store.ts';
 import { SessionManager } from './auth/session.ts';
+import { Hub } from './ws/hub.ts';
 
 export class NotUnlockedError extends Error {
   constructor() {
@@ -15,11 +16,13 @@ export class NotUnlockedError extends Error {
 export class AppContext {
   readonly sessions: SessionManager;
   readonly dataDir: string;
+  readonly hub: Hub;
   private store: DocumentStore | null = null;
 
-  constructor(dataDir: string, sessions: SessionManager = new SessionManager()) {
+  constructor(dataDir: string, sessions: SessionManager = new SessionManager(), hub: Hub = new Hub()) {
     this.dataDir = dataDir;
     this.sessions = sessions;
+    this.hub = hub;
   }
 
   hasStore(): boolean {

@@ -6,11 +6,16 @@ import { serveStatic } from './static.ts';
 import { NotUnlockedError, type AppContext } from './app-context.ts';
 import { registerAuthRoutes } from './routes/auth-routes.ts';
 import { registerDocumentRoutes } from './routes/docs-routes.ts';
+import { performHandshake, rejectUpgrade } from './ws/handshake.ts';
+import { WsConnection } from './ws/connection.ts';
 
 export interface CreateServerOptions {
   app: AppContext;
   staticDir?: string;
 }
+
+const TELEMETRY_WS_PATH = '/api/telemetry/state';
+const WS_PING_INTERVAL_MS = 30_000;
 
 function sendResponse(res: ServerResponse, response: HttpResponse): void {
   const headers = { ...response.headers };
@@ -36,13 +41,13 @@ export function buildRouter(app: AppContext): Router {
   return router;
 }
 
-/** Hand-rolled HTTP server (node:http, no framework). Phase 5 attaches a
- *  WebSocket handshake listener to this same server's 'upgrade' event —
- *  this function only wires the plain-HTTP request path. */
+/** Hand-rolled HTTP server (node:http, no framework) with the WebSocket
+ *  telemetry endpoint (attachWebSocketServer, below) wired onto the same
+ *  server's 'upgrade' event — one process, one port, two protocols. */
 export function createHttpServer(options: CreateServerOptions): Server {
   const router = buildRouter(options.app);
 
-  return createServer(async (req, res) => {
+  const server = createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
       const method = req.method ?? 'GET';
@@ -78,5 +83,35 @@ export function createHttpServer(options: CreateServerOptions): Server {
     } catch (err) {
       sendResponse(res, errorToResponse(err));
     }
+  });
+
+  attachWebSocketServer(server, options.app);
+  return server;
+}
+
+/** Wires the WebSocket telemetry endpoint onto `server`'s 'upgrade' event.
+ *  Kept as a separate step from createHttpServer so tests can create a
+ *  server without WS wiring if they don't need it, though in practice
+ *  callers always want both. Browsers' WebSocket constructor can't set
+ *  custom headers, so auth here is a `?token=` query param rather than
+ *  the Bearer header the plain REST routes use. */
+export function attachWebSocketServer(server: Server, app: AppContext): void {
+  server.on('upgrade', (req, socket) => {
+    const url = new URL(req.url ?? '/', 'http://localhost');
+    if (url.pathname !== TELEMETRY_WS_PATH) {
+      rejectUpgrade(socket, 404, 'Not Found');
+      return;
+    }
+
+    const token = url.searchParams.get('token');
+    const session = token ? app.sessions.resolve(token) : null;
+    if (!session) {
+      rejectUpgrade(socket, 401, 'Unauthorized');
+      return;
+    }
+
+    if (!performHandshake(req, socket)) return;
+    const connection = new WsConnection(socket, { pingIntervalMs: WS_PING_INTERVAL_MS });
+    app.hub.subscribe('telemetry', connection);
   });
 }
