@@ -70,6 +70,59 @@ collection and specific filter needs should filter client-side or
 maintain its own derived index over the id list rather than assuming
 server-side filtering exists here.
 
+## Cipher workbench (spec Section 8)
+
+These never persist anything — they're an ad-hoc "try it and watch it
+happen" demo against the current session's master key, using a fixed
+internal record id. Every trace step is also published to the WS
+telemetry topic below.
+
+### `POST /api/crypto/encode`
+
+Request: `{ "text": string }`. Response `200`:
+```json
+{ "ciphertext": "<base64>", "iv": "<hex>", "trace": { "steps": [...] } }
+```
+The `iv` must travel with the ciphertext to decode it later — this is
+the stateful-cipher-isn't-self-describing point spec 8.3.1 makes
+explicit; there's no separate "state header" to also track (see
+docs/CIPHER.md for why BPC doesn't need one).
+
+### `POST /api/crypto/decode`
+
+Request: `{ "ciphertext": "<base64>", "iv": "<hex>" }`. Response `200`:
+`{ "text": string, "trace": { "steps": [...] } }`, or `400` if the
+ciphertext/IV don't decode cleanly (BPC has no authentication tag, so a
+wrong IV typically decodes to garbage text rather than throwing —
+that's expected, not a bug, since BPC's job is pedagogy, not integrity).
+
+## File ingestion (spec Section 8.4)
+
+### `POST /api/ingest/file`
+
+No multipart/form-data parsing — hand-rolling that parser would be a
+meaningfully large sub-project on its own for limited benefit here.
+Instead: the raw file bytes are the entire request body, and the
+filename travels in a header.
+
+Headers: `x-file-name: <name>` (required). Optional query param
+`?collection=<name>` to also persist the extracted text as a real
+document (`{ text, source }`) in that collection, same as
+`POST /api/collections/:collection/documents`.
+
+`.docx` files go through hand-parsed ZIP + `node:zlib` inflate + regex
+run-text extraction (`extractionMethod: "docx-textract"`, with
+`warnings` noting that formatting/images/tables were discarded).
+Anything else is treated as plain text (`extractionMethod: "utf8-direct"`)
+— there's no extension allowlist. Malformed archives, oversized
+declared-uncompressed-sizes (decompression-bomb guard), and oversized
+uploads all get a clean `400`/`413` rather than a crash.
+
+Response `200` (or `201` if persisted):
+```json
+{ "fileName": "report.docx", "extractionMethod": "docx-textract", "extractedText": "...", "warnings": ["..."] }
+```
+
 ## Admin
 
 ### `POST /api/admin/compact`

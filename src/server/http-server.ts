@@ -7,6 +7,7 @@ import { NotUnlockedError, type AppContext } from './app-context.ts';
 import { registerAuthRoutes } from './routes/auth-routes.ts';
 import { registerDocumentRoutes } from './routes/docs-routes.ts';
 import { registerCryptoRoutes } from './routes/crypto-routes.ts';
+import { registerIngestRoutes } from './routes/ingest-routes.ts';
 import { performHandshake, rejectUpgrade } from './ws/handshake.ts';
 import { WsConnection } from './ws/connection.ts';
 
@@ -40,6 +41,7 @@ export function buildRouter(app: AppContext): Router {
   registerAuthRoutes(router, app);
   registerDocumentRoutes(router, app);
   registerCryptoRoutes(router, app);
+  registerIngestRoutes(router, app);
   return router;
 }
 
