@@ -157,3 +157,39 @@ test('compaction is reachable over the API and reflects real state', () =>
     const report = await res.json();
     assert.equal(report.liveKeys, 5);
   }));
+
+// The frontend is deployed separately from this server (a static Vercel
+// page pointed at whichever backend is actually running — see
+// docs/DEPLOYMENT.md), so every one of these is a real cross-origin
+// scenario, not a hypothetical one.
+test('an OPTIONS preflight is answered with 204 and CORS headers, without touching auth', () =>
+  withRunningServer(async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/api/collections/notes/documents`, {
+      method: 'OPTIONS',
+      headers: { origin: 'https://example.vercel.app', 'access-control-request-method': 'POST' },
+    });
+    assert.equal(res.status, 204);
+    assert.equal(res.headers.get('access-control-allow-origin'), '*');
+    assert.match(res.headers.get('access-control-allow-headers') ?? '', /authorization/);
+    assert.match(res.headers.get('access-control-allow-methods') ?? '', /POST/);
+  }));
+
+test('a real cross-origin request still succeeds and carries CORS headers on the actual response', () =>
+  withRunningServer(async (baseUrl) => {
+    const res = await fetch(`${baseUrl}/api/auth/unlock`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: 'https://example.vercel.app' },
+      body: JSON.stringify({ passphrase: 'cross-origin-test' }),
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('access-control-allow-origin'), '*');
+  }));
+
+test('CORS headers are present even on error responses (401, 404)', () =>
+  withRunningServer(async (baseUrl) => {
+    const unauthorized = await fetch(`${baseUrl}/api/collections/notes/documents`);
+    assert.equal(unauthorized.headers.get('access-control-allow-origin'), '*');
+
+    const notFound = await fetch(`${baseUrl}/api/nonexistent`);
+    assert.equal(notFound.headers.get('access-control-allow-origin'), '*');
+  }));

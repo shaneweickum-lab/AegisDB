@@ -34,6 +34,8 @@
       This derives a session key server-side (scrypt) and opens the
       document store — see <code>docs/THREAT-MODEL.md</code>. Nothing
       encrypted here is persisted; the workbench below is an ad-hoc demo.
+      Backend: <code id="backend-url">—</code>
+      (append <code>?backend=https://your-server</code> to this page's URL to change it)
     </p>
   </section>
 
@@ -41,7 +43,12 @@
     <div class="workbench-io">
       <div class="io-block">
         <label for="input-text">input (plaintext to encrypt, or base64 ciphertext to decrypt)</label>
-        <textarea id="input-text" rows="4"></textarea>
+        <textarea id="input-text" rows="4" placeholder="type something like &quot;Apple&quot;, or load a file below"></textarea>
+        <div class="file-row">
+          <label for="file-input">or load a file (.txt, .md, .docx, or any text/code file)</label>
+          <input id="file-input" type="file" accept=".txt,.md,.docx,text/plain" />
+          <span id="file-status" class="file-status"></span>
+        </div>
         <div class="iv-row">
           <label for="iv-input">IV (hex, required to decrypt)</label>
           <input id="iv-input" type="text" placeholder="filled in automatically after encrypting" />
