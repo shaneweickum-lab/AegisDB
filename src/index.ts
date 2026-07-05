@@ -1,17 +1,31 @@
-// Minimal bootstrap so the server is runnable while building — Phase 10
-// replaces this with the full deploy/config.ts abstraction (tunnel/VPS
-// modes, proper env validation).
 import { fileURLToPath } from 'node:url';
 import { createHttpServer } from './server/http-server.ts';
 import { AppContext } from './server/app-context.ts';
+import { SessionManager } from './server/auth/session.ts';
+import { InvalidConfigError, parseConfig } from './deploy/config.ts';
+import { printTunnelInstructions } from './deploy/tunnel.ts';
+import { printVpsInstructions } from './deploy/vps.ts';
 
-const port = Number(process.env.PORT ?? 8787);
-const dataDir = process.env.AEGIS_DATA_DIR ?? './data';
+let config;
+try {
+  config = parseConfig(process.env);
+} catch (err) {
+  if (err instanceof InvalidConfigError) {
+    console.error(`Configuration error: ${err.message}`);
+    process.exit(1);
+  }
+  throw err;
+}
+
 const staticDir = fileURLToPath(new URL('../public', import.meta.url));
-
-const app = new AppContext(dataDir);
+const sessions = new SessionManager(config.sessionTtlMs);
+const app = new AppContext(config.dataDir, sessions);
 const server = createHttpServer({ app, staticDir });
 
-server.listen(port, () => {
-  console.log(`AegisDB listening on http://localhost:${port} (data: ${dataDir}, static: ${staticDir})`);
+server.listen(config.port, config.bindHost, () => {
+  console.log(
+    `AegisDB listening on http://${config.bindHost}:${config.port} (mode: ${config.mode}, data: ${config.dataDir})`
+  );
+  if (config.mode === 'local-tunnel') printTunnelInstructions(config);
+  else printVpsInstructions(config);
 });

@@ -44,3 +44,29 @@ Either way, point the Vercel-hosted frontend at that URL via `?backend=`.
 Copying data between the two modes (or between machines) is exactly
 Section 9.2.2's migration path — copy the shard's data files, no format
 conversion.
+
+### Configuration
+
+One env-driven config (`src/deploy/config.ts`), read once at boot
+(`npm run dev`, or `node dist/index.js` after `npm run build`) — nothing
+else in the codebase branches on deployment mode:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `AEGIS_MODE` | `local-tunnel` | `local-tunnel` or `vps` |
+| `PORT` | `8787` | `0` lets the OS assign an ephemeral port |
+| `AEGIS_DATA_DIR` | `./data` | where `shard.data`/`shard.index` live |
+| `AEGIS_SESSION_TTL_MS` | `1800000` (30 min) | session idle timeout |
+| `AEGIS_TUNNEL_PROVIDER` | `cloudflare` | `cloudflare` or `ngrok` (local-tunnel mode only) |
+| `AEGIS_TUNNEL_SUBDOMAIN` | — | informational only — configure it in your tunnel provider, not here |
+| `AEGIS_PUBLIC_HOST` | — | informational only (vps mode) — point DNS/your reverse proxy here yourself |
+
+Invalid values (bad mode, out-of-range port, empty data dir, etc.) fail
+fast with a clear message before the server ever starts listening,
+rather than surfacing as a confusing runtime error later.
+
+```
+AEGIS_MODE=local-tunnel PORT=8787 npm run dev
+# in another terminal:
+cloudflared tunnel --url http://localhost:8787
+```
