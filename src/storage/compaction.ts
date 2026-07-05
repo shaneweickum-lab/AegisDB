@@ -28,8 +28,12 @@ export async function compactShard(
   const dataTmpPath = `${dataPath}.compact.tmp`;
   const indexTmpPath = `${indexPath}.compact.tmp`;
 
-  let bytesBefore = 0;
-  for (const entry of keydir.values()) bytesBefore += entry.length;
+  // The data file's actual current size — not "sum of the keydir's
+  // current entries," which would only count each key's LATEST version
+  // and silently miss every superseded version still occupying space in
+  // the pre-compaction file (the common case for a frequently-overwritten
+  // key with no deletes at all).
+  const bytesBefore = dataLog.size;
 
   const liveEntries = [...keydir.entries()].filter(([, entry]) => !entry.deleted);
   const newDataLog = await AppendLog.create(dataTmpPath, newGeneration);

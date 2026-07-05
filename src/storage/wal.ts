@@ -54,6 +54,14 @@ export class AppendLog {
     this.cursor = cursor;
   }
 
+  /** Current on-disk size in bytes (header + every record appended so
+   *  far, including superseded/tombstoned ones that compaction hasn't
+   *  reclaimed yet) — NOT the same as "sum of the keydir's current
+   *  entries," which only counts each key's latest version. */
+  get size(): number {
+    return this.cursor;
+  }
+
   static async create(path: string, generation: number): Promise<AppendLog> {
     const handle = await open(path, 'wx+');
     const header = encodeFileHeader(generation);

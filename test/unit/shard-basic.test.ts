@@ -122,6 +122,29 @@ test('compact() preserves the live key set and its values', () =>
     await shard.close();
   }));
 
+test("compact() reclaims superseded same-size overwrites, not just tombstones (regression: bytesBefore must reflect the real pre-compaction file size)", () =>
+  withTempShard(async (dir) => {
+    const shard = await Shard.open(dir);
+    // Overwrite the same small set of keys many times with same-size
+    // values and no deletes at all — every prior version is still
+    // physically present in the data file until compaction runs, but a
+    // "sum of the keydir's current entries" metric would see only the
+    // latest version per key and (wrongly) report nothing reclaimable.
+    for (let round = 0; round < 50; round++) {
+      for (let k = 0; k < 5; k++) {
+        await shard.put(`key-${k}`, utf8Encode(`value-${round}`.padEnd(20, ' ')));
+      }
+    }
+
+    const report = await shard.compact();
+    assert.equal(report.liveKeys, 5);
+    assert.ok(
+      report.bytesAfter < report.bytesBefore,
+      `expected compaction to reclaim space from 245 superseded versions, got bytesBefore=${report.bytesBefore} bytesAfter=${report.bytesAfter}`
+    );
+    await shard.close();
+  }));
+
 test('compact() result survives close + reopen', () =>
   withTempShard(async (dir) => {
     const shard = await Shard.open(dir);
