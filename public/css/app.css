@@ -189,6 +189,30 @@ button:hover {
   word-break: break-all;
 }
 
+.file-row {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.file-row label {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.file-status {
+  font-size: 0.75rem;
+  opacity: 0.75;
+}
+
+.file-status.error {
+  color: #d14343;
+  opacity: 1;
+}
+
 .button-row {
   margin-top: 0.5rem;
   display: flex;

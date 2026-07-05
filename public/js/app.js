@@ -14,9 +14,12 @@ const els = {
   unlockForm: document.getElementById('unlock-form'),
   passphrase: document.getElementById('passphrase'),
   sessionStatus: document.getElementById('session-status'),
+  backendUrl: document.getElementById('backend-url'),
   workbench: document.getElementById('workbench'),
   inputText: document.getElementById('input-text'),
   outputText: document.getElementById('output-text'),
+  fileInput: document.getElementById('file-input'),
+  fileStatus: document.getElementById('file-status'),
   ivInput: document.getElementById('iv-input'),
   ivDisplay: document.getElementById('iv-display'),
   encryptBtn: document.getElementById('encrypt-btn'),
@@ -32,6 +35,8 @@ const els = {
   exponentCurve: document.getElementById('exponent-curve'),
   diffView: document.getElementById('diff-view'),
 };
+
+els.backendUrl.textContent = window.AEGIS_BACKEND_URL;
 
 function render(index, total) {
   if (!currentTrace) return;
@@ -49,6 +54,19 @@ function render(index, total) {
   els.positionLabel.textContent = total > 0 ? `${index + 1} / ${total}` : '0 / 0';
 }
 
+// A raw fetch() rejection (TypeError, in every major browser) means the
+// request never got a response at all — a network or CORS failure, not
+// an application error. The default browser message ("Failed to fetch")
+// gives no hint about *why*, which is exactly what turned a one-line CORS
+// gap into a confusing dead end — so name the likely cause and point at
+// the config that controls it instead of surfacing the raw browser text.
+function describeError(err) {
+  if (err instanceof TypeError) {
+    return `could not reach backend at ${window.AEGIS_BACKEND_URL} — is it running and reachable? (see docs/DEPLOYMENT.md; append ?backend=<url> to point this page at a different one)`;
+  }
+  return err.message;
+}
+
 async function api(path, body) {
   const res = await fetch(`${window.AEGIS_BACKEND_URL}${path}`, {
     method: 'POST',
@@ -57,6 +75,24 @@ async function api(path, body) {
       ...(sessionToken ? { authorization: `Bearer ${sessionToken}` } : {}),
     },
     body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `request failed (${res.status})`);
+  return data;
+}
+
+// Ingestion (spec 8.4) takes raw file bytes plus a filename header, not a
+// JSON body — deliberately not multipart/form-data (see
+// src/server/routes/ingest-routes.ts) — so this can't reuse api() above.
+async function uploadFile(file) {
+  const bytes = await file.arrayBuffer();
+  const res = await fetch(`${window.AEGIS_BACKEND_URL}/api/ingest/file`, {
+    method: 'POST',
+    headers: {
+      'x-file-name': file.name,
+      ...(sessionToken ? { authorization: `Bearer ${sessionToken}` } : {}),
+    },
+    body: bytes,
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || `request failed (${res.status})`);
@@ -79,7 +115,7 @@ els.unlockForm.addEventListener('submit', async (event) => {
     els.workbench.hidden = false;
     connectTelemetry(sessionToken, () => flashLiveIndicator());
   } catch (err) {
-    els.sessionStatus.textContent = `error: ${err.message}`;
+    els.sessionStatus.textContent = `error: ${describeError(err)}`;
     els.sessionStatus.classList.remove('ok');
   }
 });
@@ -93,7 +129,7 @@ els.encryptBtn.addEventListener('click', async () => {
     currentTrace = result.trace;
     player.load(currentTrace.steps);
   } catch (err) {
-    els.outputText.value = `error: ${err.message}`;
+    els.outputText.value = `error: ${describeError(err)}`;
   }
 });
 
@@ -107,7 +143,26 @@ els.decryptBtn.addEventListener('click', async () => {
     currentTrace = result.trace;
     player.load(currentTrace.steps);
   } catch (err) {
-    els.outputText.value = `error: ${err.message}`;
+    els.outputText.value = `error: ${describeError(err)}`;
+  }
+});
+
+els.fileInput.addEventListener('change', async () => {
+  const file = els.fileInput.files[0];
+  if (!file) return;
+
+  els.fileStatus.textContent = `extracting "${file.name}"…`;
+  els.fileStatus.classList.remove('error');
+  try {
+    const result = await uploadFile(file);
+    els.inputText.value = result.extractedText;
+    const warningNote = result.warnings.length > 0 ? ` (${result.warnings.join('; ')})` : '';
+    els.fileStatus.textContent = `loaded via ${result.extractionMethod}: ${result.extractedText.length} chars${warningNote}`;
+  } catch (err) {
+    els.fileStatus.textContent = `error: ${describeError(err)}`;
+    els.fileStatus.classList.add('error');
+  } finally {
+    els.fileInput.value = ''; // allow re-selecting the same file later
   }
 });
 

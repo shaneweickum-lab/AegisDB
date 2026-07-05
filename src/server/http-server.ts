@@ -19,8 +19,21 @@ export interface CreateServerOptions {
 const TELEMETRY_WS_PATH = '/api/telemetry/state';
 const WS_PING_INTERVAL_MS = 30_000;
 
+/** The frontend is deliberately deployed separately from this server
+ *  (docs/DEPLOYMENT.md's split-hosting model — a static Vercel-hosted
+ *  page pointed at whichever backend is actually running), so every
+ *  response needs CORS headers or the browser blocks it outright before
+ *  the frontend ever sees a useful error. `*` is safe here specifically
+ *  because auth is a bearer token in a custom header, not a cookie —
+ *  this is never a "credentialed" CORS request. */
+const CORS_HEADERS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-headers': 'authorization, content-type, x-file-name',
+  'access-control-allow-methods': 'GET, POST, PUT, DELETE, OPTIONS',
+};
+
 function sendResponse(res: ServerResponse, response: HttpResponse): void {
-  const headers = { ...response.headers };
+  const headers: Record<string, string> = { ...CORS_HEADERS, ...response.headers };
   if (typeof response.body === 'string' && !headers['content-type']) {
     headers['content-type'] = 'text/plain; charset=utf-8';
   }
@@ -55,6 +68,17 @@ export function createHttpServer(options: CreateServerOptions): Server {
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
       const method = req.method ?? 'GET';
+
+      // CORS preflight: browsers send this before the real cross-origin
+      // request and never attach Authorization to it, so it must be
+      // answered before any auth/routing check — and with a bare 204,
+      // not routed through sendResponse's JSON-body assumptions.
+      if (method === 'OPTIONS') {
+        res.writeHead(204, CORS_HEADERS);
+        res.end();
+        return;
+      }
+
       const match = router.match(method, url.pathname);
 
       if (match) {
