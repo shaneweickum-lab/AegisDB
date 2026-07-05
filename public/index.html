@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AegisDB — Cipher Visualizer</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <header class="header-bar">
+    <h1>AegisDB</h1>
+    <span id="session-status" class="session-status">locked</span>
+    <span id="live-indicator" class="live-indicator" title="live telemetry activity"></span>
+    <div class="tick-rate-control">
+      <label for="tick-rate">tick rate</label>
+      <input id="tick-rate" type="range" min="1" max="60" value="12" />
+      <span id="tick-rate-label">12 fps</span>
+    </div>
+    <div class="playback-controls">
+      <button id="play-btn" type="button">▶ play</button>
+      <button id="pause-btn" type="button">⏸ pause</button>
+      <button id="step-btn" type="button">⏭ step</button>
+      <span id="position-label" class="position-label">0 / 0</span>
+    </div>
+  </header>
+
+  <section class="unlock-panel">
+    <form id="unlock-form">
+      <label for="passphrase">passphrase</label>
+      <input id="passphrase" type="password" placeholder="unlock a session to use the workbench" required />
+      <button type="submit">unlock</button>
+    </form>
+    <p class="note">
+      This derives a session key server-side (scrypt) and opens the
+      document store — see <code>docs/THREAT-MODEL.md</code>. Nothing
+      encrypted here is persisted; the workbench below is an ad-hoc demo.
+    </p>
+  </section>
+
+  <section id="workbench" class="workbench" hidden>
+    <div class="workbench-io">
+      <div class="io-block">
+        <label for="input-text">input (plaintext to encrypt, or base64 ciphertext to decrypt)</label>
+        <textarea id="input-text" rows="4"></textarea>
+        <div class="iv-row">
+          <label for="iv-input">IV (hex, required to decrypt)</label>
+          <input id="iv-input" type="text" placeholder="filled in automatically after encrypting" />
+        </div>
+        <div class="button-row">
+          <button id="encrypt-btn" type="button">▶ Encrypt</button>
+          <button id="decrypt-btn" type="button">◀ Decrypt</button>
+        </div>
+      </div>
+      <div class="io-block">
+        <label for="output-text">output</label>
+        <textarea id="output-text" rows="4" readonly></textarea>
+        <div class="iv-row">
+          <label>IV used</label>
+          <span id="iv-display" class="iv-display">—</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="viz-grid">
+    <div class="viz-panel">
+      <h2>Frequency Histogram</h2>
+      <canvas id="histogram" width="480" height="180"></canvas>
+    </div>
+    <div class="viz-panel">
+      <h2>Band Drift Curve</h2>
+      <canvas id="exponent-curve" width="480" height="180"></canvas>
+    </div>
+    <div class="viz-panel viz-panel-wide">
+      <h2>Raw ↔ Cipher Diff View</h2>
+      <canvas id="diff-view" width="980" height="80"></canvas>
+    </div>
+  </section>
+
+  <script type="module" src="/js/app-config.js"></script>
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
